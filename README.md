@@ -4,6 +4,8 @@ A 3D open world hide and seek game. The unicorn and pegasus collect stars and hi
 
 **Game design by Coco, age 4.**
 
+**Play it now: https://amyleesterling.github.io/cocos-mythic-meadow/**
+
 ## How to play
 
 - Pick your character: unicorn, pegasus, or wolf.
