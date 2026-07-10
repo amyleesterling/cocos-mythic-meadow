@@ -255,13 +255,13 @@ function addShadows(group) {
 
 function makeEye(irisColor, glow = false) {
   const eye = new THREE.Group();
-  const white = new THREE.Mesh(new THREE.SphereGeometry(0.115, 14, 12), toon(0xffffff));
+  const white = new THREE.Mesh(new THREE.SphereGeometry(0.115, 28, 20), toon(0xffffff));
   const iris = new THREE.Mesh(
-    new THREE.SphereGeometry(0.072, 12, 10),
+    new THREE.SphereGeometry(0.072, 24, 18),
     glow ? toon(irisColor, { emissive: irisColor, emissiveIntensity: 1.2 }) : toon(irisColor)
   );
   iris.position.z = 0.055;
-  const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.038, 10, 8), toon(0x2a1a3a));
+  const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.038, 20, 16), toon(0x2a1a3a));
   pupil.position.z = 0.1;
   if (glow) pupil.scale.set(0.6, 1.4, 1);
   const glint = new THREE.Mesh(new THREE.SphereGeometry(0.018, 8, 6), toon(0xffffff, { emissive: 0xffffff, emissiveIntensity: 1 }));
@@ -272,10 +272,10 @@ function makeEye(irisColor, glow = false) {
 
 function makeLeg(color, hoofColor) {
   const leg = new THREE.Group();
-  const geo = new THREE.CylinderGeometry(0.1, 0.09, 0.85, 10);
+  const geo = new THREE.CylinderGeometry(0.1, 0.09, 0.85, 18);
   geo.translate(0, -0.425, 0);
   leg.add(new THREE.Mesh(geo, toon(color)));
-  const hoof = new THREE.Mesh(new THREE.SphereGeometry(0.115, 10, 8), toon(hoofColor));
+  const hoof = new THREE.Mesh(new THREE.SphereGeometry(0.115, 20, 16), toon(hoofColor));
   hoof.position.y = -0.85;
   hoof.scale.set(1, 0.75, 1);
   leg.add(hoof);
@@ -294,12 +294,12 @@ function buildPony(kind) {
   const body = new THREE.Group();
   root.add(body);
 
-  const torso = new THREE.Mesh(new THREE.SphereGeometry(0.56, 20, 16), toon(bodyColor));
+  const torso = new THREE.Mesh(new THREE.SphereGeometry(0.56, 36, 26), toon(bodyColor));
   torso.position.y = 1.0;
   torso.scale.set(0.95, 0.9, 1.45);
   body.add(torso);
 
-  const chest = new THREE.Mesh(new THREE.SphereGeometry(0.42, 18, 14), toon(bodyColor));
+  const chest = new THREE.Mesh(new THREE.SphereGeometry(0.42, 32, 24), toon(bodyColor));
   chest.position.set(0, 1.1, 0.5);
   body.add(chest);
 
@@ -307,10 +307,10 @@ function buildPony(kind) {
   head.position.set(0, 1.72, 0.8);
   body.add(head);
 
-  const skull = new THREE.Mesh(new THREE.SphereGeometry(0.4, 20, 16), toon(bodyColor));
+  const skull = new THREE.Mesh(new THREE.SphereGeometry(0.4, 36, 26), toon(bodyColor));
   head.add(skull);
 
-  const snout = new THREE.Mesh(new THREE.SphereGeometry(0.17, 14, 12), toon(0xfff0f6));
+  const snout = new THREE.Mesh(new THREE.SphereGeometry(0.17, 28, 20), toon(0xfff0f6));
   snout.position.set(0, -0.11, 0.32);
   snout.scale.set(1, 0.78, 0.95);
   head.add(snout);
@@ -323,11 +323,11 @@ function buildPony(kind) {
 
   // ears
   for (const s of [-1, 1]) {
-    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.26, 10), toon(bodyColor));
+    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.26, 20), toon(bodyColor));
     ear.position.set(0.2 * s, 0.37, -0.05);
     ear.rotation.z = -0.25 * s;
     head.add(ear);
-    const inner = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.14, 8), toon(0xffb8de));
+    const inner = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.14, 16), toon(0xffb8de));
     inner.position.set(0.2 * s, 0.36, -0.02);
     inner.rotation.z = -0.25 * s;
     head.add(inner);
@@ -337,30 +337,39 @@ function buildPony(kind) {
   const eyeL = makeEye(irisColor); eyeL.position.set(0.165, 0.09, 0.3); eyeL.rotation.y = 0.3; eyeL.scale.setScalar(1.18); head.add(eyeL);
   const eyeR = makeEye(irisColor); eyeR.position.set(-0.165, 0.09, 0.3); eyeR.rotation.y = -0.3; eyeR.scale.setScalar(1.18); head.add(eyeR);
   for (const s of [-1, 1]) {
-    const blush = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), toon(0xffb0d8));
+    const blush = new THREE.Mesh(new THREE.SphereGeometry(0.07, 20, 16), toon(0xffb0d8));
     blush.position.set(0.28 * s, -0.08, 0.24);
     blush.scale.set(1, 0.55, 0.5);
     head.add(blush);
   }
 
-  // horn
+  // spiral horn: smooth cone wrapped in tapering golden ridges
   let horn = null;
   if (isUni) {
-    horn = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.5, 10), toon(0xffd166, { emissive: 0xffb347, emissiveIntensity: 1.2 }));
+    horn = new THREE.Group();
+    const hornMat = toon(0xffd166, { emissive: 0xffb347, emissiveIntensity: 1.2 });
+    horn.add(new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.5, 24), hornMat));
+    for (let k = 0; k < 3; k++) {
+      const ridge = new THREE.Mesh(new THREE.TorusGeometry(0.072 - k * 0.019, 0.017, 10, 26), hornMat);
+      ridge.position.y = -0.13 + k * 0.13;
+      ridge.rotation.x = Math.PI / 2;
+      horn.add(ridge);
+    }
     horn.position.set(0, 0.48, 0.1);
     horn.rotation.x = -0.22;
     head.add(horn);
   }
 
-  // mane along the neck
-  maneColors.forEach((mc, i) => {
-    const puff = new THREE.Mesh(new THREE.SphereGeometry(0.13 - i * 0.008, 12, 10), toon(mc));
-    puff.position.set(0, 2.06 - i * 0.15, 0.56 - i * 0.21);
+  // full flowing mane along the neck
+  for (let i = 0; i < 8; i++) {
+    const mc = maneColors[i % maneColors.length];
+    const puff = new THREE.Mesh(new THREE.SphereGeometry(0.135 - i * 0.006, 24, 18), toon(mc));
+    puff.position.set(Math.sin(i * 2.1) * 0.045, 2.08 - i * 0.11, 0.58 - i * 0.15);
     body.add(puff);
-  });
+  }
   // two small forelock puffs framing the forehead
   for (const s of [-1, 1]) {
-    const forelock = new THREE.Mesh(new THREE.SphereGeometry(0.085, 12, 10), toon(maneColors[(s + 1) / 2]));
+    const forelock = new THREE.Mesh(new THREE.SphereGeometry(0.085, 24, 18), toon(maneColors[(s + 1) / 2]));
     forelock.position.set(0.1 * s, 0.34, 0.19);
     head.add(forelock);
   }
@@ -368,10 +377,10 @@ function buildPony(kind) {
   // tail
   const tail = new THREE.Group();
   tail.position.set(0, 1.22, -0.86);
-  const tailColors = isUni ? [0xff9ff3, 0xb983ff, 0xffb8de] : [0xffd166, 0xffe58a, 0xfff3c9];
+  const tailColors = isUni ? [0xff9ff3, 0xb983ff, 0xffb8de, 0xff9ff3] : [0xffd166, 0xffe58a, 0xfff3c9, 0xffd166];
   tailColors.forEach((tc, i) => {
-    const puff = new THREE.Mesh(new THREE.SphereGeometry(0.14 - i * 0.025, 12, 10), toon(tc));
-    puff.position.set(0, -0.12 - i * 0.2, -0.08 - i * 0.12);
+    const puff = new THREE.Mesh(new THREE.SphereGeometry(0.145 - i * 0.022, 24, 18), toon(tc));
+    puff.position.set(Math.sin(i * 2.4) * 0.03, -0.1 - i * 0.17, -0.08 - i * 0.11);
     tail.add(puff);
   });
   body.add(tail);
@@ -394,7 +403,7 @@ function buildPony(kind) {
       const wing = new THREE.Group();
       wing.position.set(0.34 * s, 1.44, 0.05);
       for (let f = 0; f < 3; f++) {
-        const feather = new THREE.Mesh(new THREE.SphereGeometry(0.3 - f * 0.045, 12, 10), toon(f === 2 ? 0xffb8de : 0xffffff));
+        const feather = new THREE.Mesh(new THREE.SphereGeometry(0.3 - f * 0.045, 24, 18), toon(f === 2 ? 0xffb8de : 0xffffff));
         feather.position.set((0.24 + f * 0.3) * s, 0.06 + f * 0.1, -0.08 - f * 0.16);
         feather.scale.set(1.3, 0.24, 0.72);
         feather.rotation.y = 0.3 * f * s;
@@ -420,17 +429,17 @@ function buildWolf() {
   const body = new THREE.Group();
   root.add(body);
 
-  const torso = new THREE.Mesh(new THREE.SphereGeometry(0.66, 20, 16), toon(fur));
+  const torso = new THREE.Mesh(new THREE.SphereGeometry(0.66, 36, 26), toon(fur));
   torso.position.y = 0.95;
   torso.scale.set(1, 0.95, 1.5);
   body.add(torso);
 
-  const belly = new THREE.Mesh(new THREE.SphereGeometry(0.5, 16, 12), toon(furLight));
+  const belly = new THREE.Mesh(new THREE.SphereGeometry(0.5, 30, 22), toon(furLight));
   belly.position.set(0, 0.72, 0.15);
   belly.scale.set(0.85, 0.7, 1.2);
   body.add(belly);
 
-  const ruff = new THREE.Mesh(new THREE.SphereGeometry(0.52, 16, 12), toon(furLight));
+  const ruff = new THREE.Mesh(new THREE.SphereGeometry(0.52, 30, 22), toon(furLight));
   ruff.position.set(0, 1.1, 0.5);
   ruff.scale.set(1, 0.9, 0.8);
   body.add(ruff);
@@ -439,21 +448,21 @@ function buildWolf() {
   head.position.set(0, 1.66, 0.9);
   body.add(head);
 
-  const skull = new THREE.Mesh(new THREE.SphereGeometry(0.46, 20, 16), toon(fur));
+  const skull = new THREE.Mesh(new THREE.SphereGeometry(0.46, 36, 26), toon(fur));
   head.add(skull);
 
-  const snout = new THREE.Mesh(new THREE.SphereGeometry(0.22, 14, 12), toon(furLight));
+  const snout = new THREE.Mesh(new THREE.SphereGeometry(0.22, 28, 20), toon(furLight));
   snout.position.set(0, -0.14, 0.38);
   snout.scale.set(1, 0.8, 1.15);
   head.add(snout);
 
-  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.085, 10, 8), toon(0x3a2f56));
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.085, 20, 16), toon(0x3a2f56));
   nose.position.set(0, -0.08, 0.6);
   head.add(nose);
 
   // grin: little white fangs peeking out
   for (const s of [-1, 1]) {
-    const fang = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.09, 6), toon(0xffffff));
+    const fang = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.09, 12), toon(0xffffff));
     fang.position.set(0.1 * s, -0.27, 0.44);
     fang.rotation.x = Math.PI;
     head.add(fang);
@@ -461,14 +470,25 @@ function buildWolf() {
 
   // big pointy ears with pink inside
   for (const s of [-1, 1]) {
-    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.4, 10), toon(fur));
+    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.4, 20), toon(fur));
     ear.position.set(0.25 * s, 0.42, -0.05);
     ear.rotation.z = -0.3 * s;
     head.add(ear);
-    const inner = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.22, 8), toon(0xffb8de));
+    const inner = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.22, 16), toon(0xffb8de));
     inner.position.set(0.25 * s, 0.4, 0);
     inner.rotation.z = -0.3 * s;
     head.add(inner);
+  }
+
+  // fluffy cheek tufts for a wilder silhouette
+  for (const s of [-1, 1]) {
+    for (let k = 0; k < 2; k++) {
+      const fluff = new THREE.Mesh(new THREE.ConeGeometry(0.1 - k * 0.03, 0.28, 12), toon(k ? furLight : fur));
+      fluff.position.set(0.42 * s, -0.08 - k * 0.1, 0.08);
+      fluff.rotation.z = s * 1.75;
+      fluff.rotation.x = 0.2;
+      head.add(fluff);
+    }
   }
 
   // glowing amber eyes + mischievous eyebrows
@@ -484,10 +504,10 @@ function buildWolf() {
   // big fluffy tail, tip lighter
   const tail = new THREE.Group();
   tail.position.set(0, 1.25, -0.9);
-  const tailBits = [[0.22, fur, 0], [0.18, fur, 1], [0.14, furLight, 2]];
+  const tailBits = [[0.24, fur, 0], [0.2, fur, 1], [0.17, fur, 2], [0.13, furLight, 3]];
   for (const [r, c, i] of tailBits) {
-    const puff = new THREE.Mesh(new THREE.SphereGeometry(r, 12, 10), toon(c));
-    puff.position.set(0, 0.1 + i * 0.18, -0.12 - i * 0.16);
+    const puff = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 18), toon(c));
+    puff.position.set(Math.sin(i * 2.2) * 0.03, 0.1 + i * 0.15, -0.12 - i * 0.14);
     tail.add(puff);
   }
   body.add(tail);
@@ -700,11 +720,11 @@ function buildGroundDetail(scene, cfg) {
       const { x, z } = randomInWorld(cfg.size, 6, cfg.size / 2 - 5);
       const shroom = new THREE.Group();
       const s = 0.7 + Math.random() * 0.9;
-      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 0.3, 7), toon(0xfff3e6));
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 0.3, 14), toon(0xfff3e6));
       stem.position.y = 0.15;
       const col = capCols[(Math.random() * 3) | 0];
       const cap = new THREE.Mesh(
-        new THREE.SphereGeometry(0.19, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+        new THREE.SphereGeometry(0.19, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2),
         toon(col, { emissive: col, emissiveIntensity: isNight ? 1.2 : 0.35 })
       );
       cap.position.y = 0.28;
@@ -820,24 +840,24 @@ function makeFireflies(cfg) {
 function makeStag(cfg) {
   const c = 0xf5eefc;
   const root = new THREE.Group();
-  const torso = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 12), toon(c));
+  const torso = new THREE.Mesh(new THREE.SphereGeometry(0.42, 30, 22), toon(c));
   torso.position.y = 1.2;
   torso.scale.set(0.75, 0.8, 1.5);
   root.add(torso);
-  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.15, 0.85, 8), toon(c));
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.15, 0.85, 16), toon(c));
   neck.position.set(0, 1.65, 0.5);
   neck.rotation.x = -0.35;
   root.add(neck);
   const head = new THREE.Group();
   head.position.set(0, 2.05, 0.68);
   root.add(head);
-  head.add(new THREE.Mesh(new THREE.SphereGeometry(0.2, 14, 10), toon(c)));
-  const snout = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), toon(0xfff8ff));
+  head.add(new THREE.Mesh(new THREE.SphereGeometry(0.2, 26, 18), toon(c)));
+  const snout = new THREE.Mesh(new THREE.SphereGeometry(0.1, 20, 16), toon(0xfff8ff));
   snout.position.set(0, -0.05, 0.18);
   snout.scale.set(0.8, 0.7, 1.2);
   head.add(snout);
   for (const s of [-1, 1]) {
-    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.16, 7), toon(c));
+    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.16, 14), toon(c));
     ear.position.set(0.11 * s, 0.18, -0.05);
     ear.rotation.z = -0.5 * s;
     head.add(ear);
@@ -848,12 +868,12 @@ function makeStag(cfg) {
     const antler = new THREE.Group();
     antler.position.set(0.09 * s, 0.16, 0);
     const amat = toon(0xffd166, { emissive: 0xffc233, emissiveIntensity: 1.7 });
-    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.03, 0.52, 6), amat);
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.03, 0.52, 12), amat);
     beam.position.y = 0.26;
     beam.rotation.z = -0.4 * s;
     antler.add(beam);
     for (let k = 0; k < 2; k++) {
-      const tine = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.02, 0.22, 6), amat);
+      const tine = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.02, 0.22, 12), amat);
       tine.position.set((0.07 + k * 0.05) * -s, 0.24 + k * 0.16, 0.03);
       tine.rotation.z = 0.7 * s;
       tine.rotation.x = -0.2;
@@ -864,7 +884,7 @@ function makeStag(cfg) {
   const legs = [];
   for (const [x, z] of [[0.2, 0.42], [-0.2, 0.42], [0.2, -0.42], [-0.2, -0.42]]) {
     const leg = new THREE.Group();
-    const geo = new THREE.CylinderGeometry(0.045, 0.04, 1.1, 7);
+    const geo = new THREE.CylinderGeometry(0.045, 0.04, 1.1, 14);
     geo.translate(0, -0.55, 0);
     leg.add(new THREE.Mesh(geo, toon(0xe8ddf5)));
     leg.position.set(x, 1.15, z);
@@ -910,17 +930,17 @@ function makeWhale(cfg) {
     m.transparent = true; m.opacity = op; m.depthWrite = false;
     return m;
   };
-  const body = new THREE.Mesh(new THREE.SphereGeometry(2.4, 20, 16), ghost(0xb9a8f0, 0.82));
+  const body = new THREE.Mesh(new THREE.SphereGeometry(2.4, 36, 26), ghost(0xb9a8f0, 0.82));
   body.scale.set(1, 0.8, 2.1);
   root.add(body);
-  const belly = new THREE.Mesh(new THREE.SphereGeometry(1.9, 16, 12), ghost(0xe8ddff, 0.7));
+  const belly = new THREE.Mesh(new THREE.SphereGeometry(1.9, 30, 22), ghost(0xe8ddff, 0.7));
   belly.position.set(0, -0.8, 0.6);
   belly.scale.set(0.9, 0.6, 1.7);
   root.add(belly);
   const tail = new THREE.Group();
   tail.position.set(0, 0.3, -5.2);
   for (const s of [-1, 1]) {
-    const fluke = new THREE.Mesh(new THREE.SphereGeometry(1.1, 12, 8), ghost(0xb9a8f0, 0.82));
+    const fluke = new THREE.Mesh(new THREE.SphereGeometry(1.1, 24, 16), ghost(0xb9a8f0, 0.82));
     fluke.scale.set(1.4, 0.22, 0.8);
     fluke.position.set(1.15 * s, 0, -0.3);
     fluke.rotation.y = 0.5 * s;
@@ -928,7 +948,7 @@ function makeWhale(cfg) {
   }
   root.add(tail);
   for (const s of [-1, 1]) {
-    const fin = new THREE.Mesh(new THREE.SphereGeometry(0.9, 12, 8), ghost(0xcbbcf5, 0.75));
+    const fin = new THREE.Mesh(new THREE.SphereGeometry(0.9, 24, 16), ghost(0xcbbcf5, 0.75));
     fin.scale.set(1.3, 0.18, 0.55);
     fin.position.set(2.1 * s, -0.5, 1.2);
     fin.rotation.z = -0.35 * s;
@@ -975,13 +995,13 @@ function makeWhale(cfg) {
 function makePhoenix(cfg) {
   const root = new THREE.Group();
   const fire = (c, i = 0.9) => toon(c, { emissive: c, emissiveIntensity: i });
-  const body = new THREE.Mesh(new THREE.SphereGeometry(0.38, 14, 10), fire(0xffc233));
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.38, 26, 18), fire(0xffc233));
   body.scale.set(0.9, 0.9, 1.3);
   root.add(body);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 8), fire(0xffd166));
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 24, 16), fire(0xffd166));
   head.position.set(0, 0.3, 0.5);
   root.add(head);
-  const beak = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.16, 7), toon(0xff8c42));
+  const beak = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.16, 14), toon(0xff8c42));
   beak.position.set(0, 0.28, 0.74);
   beak.rotation.x = Math.PI / 2;
   root.add(beak);
@@ -996,7 +1016,7 @@ function makePhoenix(cfg) {
     const wing = new THREE.Group();
     wing.position.set(0.3 * s, 0.15, 0);
     for (let f = 0; f < 3; f++) {
-      const feather = new THREE.Mesh(new THREE.SphereGeometry(0.3 - f * 0.05, 10, 8), fire(wingCols[f], 0.8));
+      const feather = new THREE.Mesh(new THREE.SphereGeometry(0.3 - f * 0.05, 20, 16), fire(wingCols[f], 0.8));
       feather.position.set((0.28 + f * 0.32) * s, f * 0.06, -0.05 - f * 0.12);
       feather.scale.set(1.4, 0.18, 0.6);
       feather.rotation.y = 0.25 * f * s;
@@ -1043,23 +1063,23 @@ function makePhoenix(cfg) {
 function makeDragon(cfg) {
   const root = new THREE.Group();
   const bodyC = 0x9fe6c8, bellyC = 0xfff3e6, wingC = 0xcbb3f5;
-  const body = new THREE.Mesh(new THREE.SphereGeometry(0.55, 16, 12), toon(bodyC));
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.55, 30, 22), toon(bodyC));
   body.scale.set(0.9, 0.9, 1.4);
   root.add(body);
-  const belly = new THREE.Mesh(new THREE.SphereGeometry(0.42, 12, 10), toon(bellyC));
+  const belly = new THREE.Mesh(new THREE.SphereGeometry(0.42, 24, 18), toon(bellyC));
   belly.position.set(0, -0.18, 0.15);
   belly.scale.set(0.8, 0.7, 1.2);
   root.add(belly);
   const head = new THREE.Group();
   head.position.set(0, 0.5, 0.85);
   root.add(head);
-  head.add(new THREE.Mesh(new THREE.SphereGeometry(0.32, 14, 10), toon(bodyC)));
-  const snout = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), toon(bellyC));
+  head.add(new THREE.Mesh(new THREE.SphereGeometry(0.32, 26, 18), toon(bodyC)));
+  const snout = new THREE.Mesh(new THREE.SphereGeometry(0.16, 20, 16), toon(bellyC));
   snout.position.set(0, -0.08, 0.26);
   snout.scale.set(1, 0.7, 1);
   head.add(snout);
   for (const s of [-1, 1]) {
-    const horn = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.2, 7), toon(0xffd166, { emissive: 0xffc233, emissiveIntensity: 0.8 }));
+    const horn = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.2, 14), toon(0xffd166, { emissive: 0xffc233, emissiveIntensity: 0.8 }));
     horn.position.set(0.13 * s, 0.3, -0.05);
     horn.rotation.z = -0.35 * s;
     head.add(horn);
@@ -1074,7 +1094,7 @@ function makeDragon(cfg) {
     const wing = new THREE.Group();
     wing.position.set(0.35 * s, 0.35, -0.1);
     for (let f = 0; f < 2; f++) {
-      const mem = new THREE.Mesh(new THREE.SphereGeometry(0.45 - f * 0.1, 10, 8), toon(wingC));
+      const mem = new THREE.Mesh(new THREE.SphereGeometry(0.45 - f * 0.1, 20, 16), toon(wingC));
       mem.position.set((0.4 + f * 0.5) * s, f * 0.14, -0.1 * f);
       mem.scale.set(1.5, 0.12, 0.9);
       wing.add(mem);
@@ -1084,17 +1104,17 @@ function makeDragon(cfg) {
   }
   const tailBits = [];
   for (let k = 0; k < 3; k++) {
-    const seg = new THREE.Mesh(new THREE.SphereGeometry(0.24 - k * 0.06, 10, 8), toon(bodyC));
+    const seg = new THREE.Mesh(new THREE.SphereGeometry(0.24 - k * 0.06, 20, 16), toon(bodyC));
     seg.position.set(0, 0.05 - k * 0.04, -0.85 - k * 0.4);
     root.add(seg);
     tailBits.push(seg);
   }
-  const tailFin = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.26, 6), toon(0xffb8de));
+  const tailFin = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.26, 12), toon(0xffb8de));
   tailFin.position.set(0, 0, -2.1);
   tailFin.rotation.x = -Math.PI / 2;
   root.add(tailFin);
   for (let k = 0; k < 4; k++) {
-    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.16, 6), toon(bellyC));
+    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.16, 12), toon(bellyC));
     spike.position.set(0, 0.55 - k * 0.06, 0.2 - k * 0.35);
     root.add(spike);
   }
@@ -1264,7 +1284,7 @@ function buildSky(scene, cfg) {
     const stars = new THREE.Points(g, starMat);
     scene.add(stars);
     skyExtras.nightStarMat = starMat;
-    const moon = new THREE.Mesh(new THREE.SphereGeometry(14, 20, 16), new THREE.MeshBasicMaterial({ color: 0xfff2c9, fog: false }));
+    const moon = new THREE.Mesh(new THREE.SphereGeometry(14, 36, 26), new THREE.MeshBasicMaterial({ color: 0xfff2c9, fog: false }));
     moon.position.set(-140, 190, -260);
     scene.add(moon);
   } else {
@@ -1290,7 +1310,7 @@ function buildRainbow(scene) {
   const cols = [0xff6f91, 0xffa25c, 0xffd166, 0xa8e6a3, 0x8ccfff, 0xb983ff, 0xff9ff3];
   cols.forEach((c, i) => {
     const arc = new THREE.Mesh(
-      new THREE.TorusGeometry(58 - i * 2.2, 1.1, 8, 60, Math.PI),
+      new THREE.TorusGeometry(58 - i * 2.2, 1.1, 12, 90, Math.PI),
       new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.55, fog: false })
     );
     group.add(arc);
@@ -1346,7 +1366,7 @@ function buildLevel(levelIdx, mode, playerKind) {
   scene.add(sunLight.target);
 
   // terrain
-  const seg = 110;
+  const seg = 150;
   const tg = new THREE.PlaneGeometry(size + 30, size + 30, seg, seg);
   tg.rotateX(-Math.PI / 2);
   const tp = tg.attributes.position;
@@ -1384,12 +1404,12 @@ function buildLevel(levelIdx, mode, playerKind) {
     const { x, z } = randomInWorld(size, 10, bound - 2);
     const tree = new THREE.Group();
     const h = 1.6 + Math.random() * 1.6;
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, h, 8), toon(0xc69c7b));
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, h, 16), toon(0xc69c7b));
     trunk.position.y = h / 2;
     tree.add(trunk);
     const fc = foliage[(Math.random() * foliage.length) | 0];
     for (let k = 0; k < 3; k++) {
-      const puff = new THREE.Mesh(new THREE.SphereGeometry(0.9 + Math.random() * 0.5, 12, 10), toon(fc));
+      const puff = new THREE.Mesh(new THREE.SphereGeometry(0.9 + Math.random() * 0.5, 24, 18), toon(fc));
       puff.position.set((Math.random() - 0.5) * 0.9, h + 0.4 + Math.random() * 0.8, (Math.random() - 0.5) * 0.9);
       tree.add(puff);
     }
@@ -1440,7 +1460,7 @@ function buildLevel(levelIdx, mode, playerKind) {
     const cl = new THREE.Group();
     for (let k = 0; k < 4; k++) {
       const puff = new THREE.Mesh(
-        new THREE.SphereGeometry(2.4 + Math.random() * 2, 10, 8),
+        new THREE.SphereGeometry(2.4 + Math.random() * 2, 20, 16),
         toon(isNight ? 0x6a5a9a : 0xffffff, { transparent: true, opacity: isNight ? 0.5 : 0.9 })
       );
       puff.position.set(k * 2.6 - 4 + Math.random(), (Math.random() - 0.5) * 1.2, (Math.random() - 0.5) * 2.5);
@@ -1461,11 +1481,11 @@ function buildLevel(levelIdx, mode, playerKind) {
     const y = H(x, z);
     const cave = new THREE.Group();
 
-    const rock = new THREE.Mesh(new THREE.IcosahedronGeometry(CAVE_BODY_R, 1), toon(0x8d7bb0));
+    const rock = new THREE.Mesh(new THREE.IcosahedronGeometry(CAVE_BODY_R, 2), toon(0x8d7bb0));
     rock.scale.set(1, 0.75, 1);
     rock.position.y = 0.3;
     cave.add(rock);
-    const rock2 = new THREE.Mesh(new THREE.IcosahedronGeometry(CAVE_BODY_R * 0.6, 1), toon(0x7a689e));
+    const rock2 = new THREE.Mesh(new THREE.IcosahedronGeometry(CAVE_BODY_R * 0.6, 2), toon(0x7a689e));
     rock2.position.set(1.6, 0.2, -1.2);
     cave.add(rock2);
 
@@ -1473,7 +1493,7 @@ function buildLevel(levelIdx, mode, playerKind) {
     const doorway = new THREE.Mesh(new THREE.CircleGeometry(1.25, 20), new THREE.MeshBasicMaterial({ color: 0x2a1a45 }));
     doorway.position.set(0, 1.0, CAVE_BODY_R * 0.92);
     cave.add(doorway);
-    const arch = new THREE.Mesh(new THREE.TorusGeometry(1.3, 0.22, 8, 20, Math.PI), toon(0xa48fd0));
+    const arch = new THREE.Mesh(new THREE.TorusGeometry(1.3, 0.22, 12, 32, Math.PI), toon(0xa48fd0));
     arch.position.set(0, 1.0, CAVE_BODY_R * 0.92);
     cave.add(arch);
 
@@ -1483,7 +1503,7 @@ function buildLevel(levelIdx, mode, playerKind) {
       toon(0xffe58a, { emissive: 0xffd166, emissiveIntensity: isNight ? 1.0 : 0.55, transparent: true, opacity: 0.75 })
     );
     const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(CAVE_PAD_R, 0.09, 8, 36),
+      new THREE.TorusGeometry(CAVE_PAD_R, 0.09, 10, 48),
       toon(0xffd166, { emissive: 0xffd166, emissiveIntensity: 1.2 })
     );
     ring.rotation.x = Math.PI / 2;
@@ -1522,10 +1542,10 @@ function buildLevel(levelIdx, mode, playerKind) {
 function makeGuideArrow() {
   const g = new THREE.Group();
   const mat = toon(0xffd166, { emissive: 0xffd166, emissiveIntensity: 1 });
-  const head = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.34, 10), mat);
+  const head = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.34, 20), mat);
   head.rotation.x = Math.PI / 2;
   head.position.z = 0.28;
-  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.4, 8), mat);
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.4, 16), mat);
   shaft.rotation.x = Math.PI / 2;
   shaft.position.z = -0.06;
   g.add(head, shaft);
@@ -1542,7 +1562,7 @@ function makeStarMesh() {
     if (k === 0) shape.moveTo(px, py); else shape.lineTo(px, py);
   }
   shape.closePath();
-  const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.16, bevelEnabled: true, bevelSize: 0.05, bevelThickness: 0.04, bevelSegments: 2 });
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.16, bevelEnabled: true, bevelSize: 0.05, bevelThickness: 0.04, bevelSegments: 5 });
   geo.center();
   const mesh = new THREE.Mesh(geo, toon(0xffd166, { emissive: 0xffc233, emissiveIntensity: 1.4 }));
   mesh.castShadow = true;
