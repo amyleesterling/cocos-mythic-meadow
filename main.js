@@ -1150,6 +1150,7 @@ const screens = ['screen-title', 'screen-select', 'screen-levels', 'screen-pause
 function showScreen(id) {
   for (const s of screens) $(s).classList.toggle('hidden', s !== id);
   $('hud').classList.toggle('hidden', !(id === null && (game.state === 'playing')));
+  if (id !== null) { $('toast').classList.add('hidden'); game.toastT = 0; }
 }
 function showToast(text, ms = 2600) {
   const t = $('toast');
@@ -1215,6 +1216,7 @@ function startLevel(levelIdx) {
   game.timer = cfg.timer;
 
   buildLevel(levelIdx, game.mode, game.character);
+  menuCast = [];
 
   // player
   player = new Character(game.character, world.scene);
@@ -1534,9 +1536,36 @@ function tick(now) {
 
   fitRenderer();
   if (!world || !player) return;
-  if (game.state !== 'playing') { renderer.render(world.scene, camera); return; }
 
   world.t += dt;
+
+  // ambient life runs in every state so menus and result screens stay alive
+  for (const s of world.stars) {
+    if (s.taken) continue;
+    s.mesh.rotation.y += dt * 1.8;
+    s.mesh.position.y = s.baseY + Math.sin(world.t * 2 + s.phase) * 0.18;
+  }
+  for (const c of world.caves) {
+    const p = 1 + Math.sin(world.t * 2.4) * 0.06;
+    c.ring.scale.setScalar(p);
+  }
+  for (const cl of world.clouds) {
+    cl.position.x += cl.userData.speed * dt;
+    if (cl.position.x > world.size) cl.position.x = -world.size;
+  }
+  world.particles.update(dt);
+
+  const inMenu = game.state === 'title' || game.state === 'select' || game.state === 'levels';
+  if (inMenu) {
+    // slow scenic orbit behind the menus
+    const a = world.t * 0.06;
+    camera.position.set(Math.sin(a) * 26, 9 + Math.sin(world.t * 0.15) * 2, Math.cos(a) * 26);
+    camera.lookAt(0, 2.5, 0);
+    player.animate(dt);
+    for (const c of menuCast) c.animate(dt);
+  }
+
+  if (game.state !== 'playing') { renderer.render(world.scene, camera); return; }
 
   updatePlayer(dt);
 
@@ -1563,22 +1592,6 @@ function tick(now) {
     updateHud();
   }
 
-  // stars spin and bob
-  for (const s of world.stars) {
-    if (s.taken) continue;
-    s.mesh.rotation.y += dt * 1.8;
-    s.mesh.position.y = s.baseY + Math.sin(world.t * 2 + s.phase) * 0.18;
-  }
-  // cave pads pulse
-  for (const c of world.caves) {
-    const p = 1 + Math.sin(world.t * 2.4) * 0.06;
-    c.ring.scale.setScalar(p);
-  }
-  // clouds drift
-  for (const cl of world.clouds) {
-    cl.position.x += cl.userData.speed * dt;
-    if (cl.position.x > world.size) cl.position.x = -world.size;
-  }
   // player safe shimmer
   if (player.safe && Math.random() < dt * 10) {
     world.particles.emit(player.pos.clone().add(new THREE.Vector3(0, 1, 0)), 2, { colors: [0xffe58a], up: 1.5, spread: 1.5, life: 0.6, grav: 0.5 });
@@ -1586,7 +1599,6 @@ function tick(now) {
   // pegasus stamina HUD
   if (game.character === 'pegasus') $('stamina-bar').style.width = `${game.stamina * 100}%`;
 
-  world.particles.update(dt);
   updateGuideArrow();
   updateCamera(dt);
 
@@ -1676,9 +1688,20 @@ window.MM = {
 };
 
 /* ---------- Boot: pretty background world behind the title ---------- */
+let menuCast = [];
 buildLevel(0, 'evade', 'unicorn');
 player = new Character('unicorn', world.scene);
 player.pos.set(0, world.H(0, 0), 4);
+player.face(1, 0.4, 1, 100);
+{
+  const peg = new Character('pegasus', world.scene);
+  peg.pos.set(-3.2, world.H(-3.2, 2), 2);
+  peg.face(0.6, 1, 1, 100);
+  const wolf = new Character('wolf', world.scene);
+  wolf.pos.set(9, world.H(9, -6), -6);
+  wolf.face(-1, 0.7, 1, 100);
+  menuCast = [peg, wolf];
+}
 guideArrow = makeGuideArrow();
 guideArrow.visible = false;
 world.scene.add(guideArrow);
