@@ -2,6 +2,11 @@
 // The unicorn and pegasus hide in caves. The wolf tries to eat them.
 
 import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 /* ============================================================
    Levels
@@ -28,6 +33,22 @@ const LEVELS = [
   { name: 'Rainbow Summit',    size: 200, stars: 12, caves: 6, wolves: 3, wolfSpeed: 8.9, sight: 17, trees: 44, crystals: 18, night: false, timer: 75, preySpeed: 8.5,
     pal: { skyTop: 0x9d7bff, skyBot: 0xffd9ec, grass: 0xa8e6a3, grass2: 0xffe58a, foliage: [0xff9ff3, 0xffd166, 0xb983ff], rainbow: true } },
 ];
+
+// ambient magic per level: which celestial creatures visit, ponds, auroras
+const SCENERY = [
+  { creatures: ['butterflies', 'stag'], ponds: 1, aurora: false },
+  { creatures: ['butterflies', 'phoenix'], ponds: 1, aurora: false },
+  { creatures: ['butterflies', 'fairies', 'stag'], ponds: 1, aurora: false },
+  { creatures: ['fairies', 'stag', 'butterflies'], ponds: 1, aurora: false },
+  { creatures: ['butterflies', 'fairies'], ponds: 3, aurora: false },
+  { creatures: ['phoenix', 'dragon'], ponds: 1, aurora: false },
+  { creatures: ['fireflies', 'fairies', 'whale'], ponds: 1, aurora: false },
+  { creatures: ['dragon', 'butterflies', 'whale'], ponds: 1, aurora: false },
+  { creatures: ['fireflies', 'fairies', 'whale', 'stag'], ponds: 1, aurora: true },
+  { creatures: ['phoenix', 'dragon', 'butterflies', 'fairies'], ponds: 2, aurora: false },
+];
+
+const RAINBOW = [0xff6f91, 0xffa25c, 0xffd166, 0xa8e6a3, 0x8ccfff, 0xb983ff];
 
 const HEART = '💛';
 const CAVE_BODY_R = 2.8;
@@ -92,8 +113,22 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.NeutralToneMapping;
+renderer.toneMappingExposure = 1.05;
 
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 900);
+
+// post-processing: bloom makes every emissive thing in the realm truly glow
+const composer = new EffectComposer(renderer);
+const renderPass = new RenderPass(new THREE.Scene(), camera);
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.45, 0.5, 0.9);
+composer.addPass(renderPass);
+composer.addPass(bloomPass);
+composer.addPass(new OutputPass());
+function renderFrame() {
+  if (world) renderPass.scene = world.scene;
+  composer.render();
+}
 
 const rendererSize = new THREE.Vector2();
 function fitRenderer() {
@@ -104,6 +139,7 @@ function fitRenderer() {
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h);
+    composer.setSize(w, h);
   }
 }
 window.addEventListener('resize', fitRenderer);
@@ -310,7 +346,7 @@ function buildPony(kind) {
   // horn
   let horn = null;
   if (isUni) {
-    horn = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.5, 10), toon(0xffd166, { emissive: 0xffb347, emissiveIntensity: 0.7 }));
+    horn = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.5, 10), toon(0xffd166, { emissive: 0xffb347, emissiveIntensity: 1.2 }));
     horn.position.set(0, 0.48, 0.1);
     horn.rotation.x = -0.22;
     head.add(horn);
@@ -476,6 +512,634 @@ function buildModel(kind) {
 }
 
 /* ============================================================
+   Mythical ambient creatures and scenery
+============================================================ */
+function buildMountains(scene, cfg) {
+  const base = new THREE.Color(cfg.pal.skyTop).lerp(new THREE.Color(cfg.pal.skyBot), 0.35);
+  const n = 14;
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + Math.random() * 0.35;
+    const r = cfg.size * (1.05 + Math.random() * 0.35);
+    const h = 13 + Math.random() * 18;
+    const w = 11 + Math.random() * 9;
+    const c = base.clone().offsetHSL((Math.random() - 0.5) * 0.02, 0, (Math.random() - 0.5) * 0.06);
+    const peak = new THREE.Mesh(new THREE.ConeGeometry(w, h, 5 + (i % 3)), toon(c));
+    peak.position.set(Math.cos(a) * r, h * 0.5 - 5, Math.sin(a) * r);
+    peak.rotation.y = Math.random() * Math.PI;
+    scene.add(peak);
+    const hc = h * 0.3;
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(w * 0.31, hc, 5 + (i % 3)), toon(0xfff5fb));
+    cap.position.set(peak.position.x, h - 5 - hc * 0.5 + 0.15, peak.position.z);
+    cap.rotation.y = peak.rotation.y;
+    scene.add(cap);
+  }
+}
+
+function buildPond() {
+  // pick the flattest of a few candidate spots so the water sits in a dip
+  let best = null, bestVar = Infinity;
+  for (let tries = 0; tries < 14; tries++) {
+    const { x, z } = randomInWorld(world.size, 12, world.bound - 8);
+    if (world.caves.some(c => dist2D(x, z, c.x, c.z) < 10)) continue;
+    const hs = [world.H(x, z), world.H(x + 4, z), world.H(x - 4, z), world.H(x, z + 4), world.H(x, z - 4)];
+    const v = Math.max(...hs) - Math.min(...hs);
+    if (v < bestVar) { bestVar = v; best = { x, z, y: Math.min(...hs) }; }
+  }
+  if (!best) return;
+  const r = 4 + Math.random() * 2.5;
+  const mat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false,
+    uniforms: {
+      t: { value: Math.random() * 10 },
+      deep: { value: new THREE.Color(0x7fa8e8) },
+      shallow: { value: new THREE.Color(0xc5ecf5) },
+    },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `varying vec2 vUv; uniform float t; uniform vec3 deep; uniform vec3 shallow;
+      void main(){
+        float d = length(vUv - 0.5) * 2.0;
+        float ripple = 0.5 + 0.5 * sin(d * 24.0 - t * 2.4);
+        vec3 col = mix(shallow, deep, d) + ripple * 0.06;
+        float sparkle = pow(max(0.0, sin(vUv.x * 43.0 + t * 1.3) * sin(vUv.y * 39.0 - t * 1.7)), 16.0);
+        col += sparkle * 0.85;
+        float alpha = 0.85 * smoothstep(1.0, 0.88, d);
+        gl_FragColor = vec4(col, alpha);
+      }`,
+  });
+  const mesh = new THREE.Mesh(new THREE.CircleGeometry(r, 36), mat);
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.set(best.x, best.y + 0.22, best.z);
+  world.scene.add(mesh);
+  world.ponds.push(mat);
+}
+
+function buildAurora(scene) {
+  for (let i = 0; i < 3; i++) {
+    const mat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
+      uniforms: { t: { value: i * 2.1 } },
+      vertexShader: `varying vec2 vUv; uniform float t;
+        void main(){ vUv = uv; vec3 p = position; p.y += sin(uv.x * 6.283 + t * 0.5) * 6.0;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0); }`,
+      fragmentShader: `varying vec2 vUv; uniform float t;
+        void main(){
+          float band = 0.5 + 0.5 * sin(vUv.x * 12.0 + t * 0.7);
+          float fadeY = smoothstep(0.0, 0.25, vUv.y) * smoothstep(1.0, 0.5, vUv.y);
+          float fadeX = smoothstep(0.0, 0.15, vUv.x) * smoothstep(1.0, 0.85, vUv.x);
+          vec3 col = mix(vec3(0.35, 0.95, 0.75), vec3(0.75, 0.45, 0.98), 0.5 + 0.5 * sin(vUv.x * 4.0 + t * 0.4));
+          gl_FragColor = vec4(col, band * fadeY * fadeX * 0.42);
+        }`,
+    });
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(240, 60, 32, 1), mat);
+    const a = i * 2.1 + 0.6;
+    mesh.position.set(Math.cos(a) * 160, 60 + i * 11, Math.sin(a) * 160);
+    mesh.lookAt(0, 30, 0);
+    scene.add(mesh);
+    world.auroras.push(mat);
+  }
+}
+
+function buildGroundDetail(scene, cfg) {
+  const isNight = cfg.night === true;
+  const dummy = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const e = new THREE.Euler();
+  const sc = new THREE.Vector3();
+  const pv = new THREE.Vector3();
+  const cc = new THREE.Color();
+
+  // swaying-look grass tufts (three merged blades, instanced once)
+  {
+    const blades = [];
+    for (let b = 0; b < 3; b++) {
+      const g = new THREE.ConeGeometry(0.05, 0.42, 5);
+      g.translate(0, 0.21, 0);
+      g.rotateZ((b - 1) * 0.22);
+      g.translate((b - 1) * 0.07, 0, (b % 2) * 0.06);
+      blades.push(g);
+    }
+    const tuftGeo = mergeGeometries(blades);
+    const n = Math.floor(cfg.size * 8);
+    const tufts = new THREE.InstancedMesh(tuftGeo, new THREE.MeshToonMaterial({ gradientMap }), n);
+    const gc = new THREE.Color(cfg.pal.grass), gc2 = new THREE.Color(cfg.pal.grass2);
+    for (let i = 0; i < n; i++) {
+      const { x, z } = randomInWorld(cfg.size, 2, cfg.size / 2 - 4);
+      e.set(0, Math.random() * Math.PI, (Math.random() - 0.5) * 0.12);
+      q.setFromEuler(e);
+      const s = 0.7 + Math.random() * 1.0;
+      sc.set(s, s * (0.8 + Math.random() * 0.7), s);
+      pv.set(x, world.H(x, z), z);
+      dummy.compose(pv, q, sc);
+      tufts.setMatrixAt(i, dummy);
+      cc.lerpColors(gc, gc2, Math.random() * 0.6).offsetHSL(0, 0.04, -0.05 + Math.random() * 0.1);
+      tufts.setColorAt(i, cc);
+    }
+    scene.add(tufts);
+  }
+
+  // five-petal daisies: petals, golden centers, and stems share matrices
+  {
+    const petals = [];
+    for (let p = 0; p < 5; p++) {
+      const g = new THREE.SphereGeometry(0.085, 8, 6);
+      g.scale(1.4, 0.35, 0.7);
+      const a = (p / 5) * Math.PI * 2;
+      g.rotateY(-a);
+      g.translate(Math.cos(a) * 0.12, 0.3, Math.sin(a) * 0.12);
+      petals.push(g);
+    }
+    const petalGeo = mergeGeometries(petals);
+    const centerGeo = new THREE.SphereGeometry(0.065, 8, 6); centerGeo.translate(0, 0.32, 0);
+    const stemGeo = new THREE.CylinderGeometry(0.018, 0.024, 0.3, 5); stemGeo.translate(0, 0.15, 0);
+    const n = Math.floor(cfg.size * 1.4);
+    const petalsIM = new THREE.InstancedMesh(petalGeo, new THREE.MeshToonMaterial({ gradientMap }), n);
+    const centersIM = new THREE.InstancedMesh(centerGeo, toon(0xffd166, { emissive: 0xffc233, emissiveIntensity: 0.35 }), n);
+    const stemsIM = new THREE.InstancedMesh(stemGeo, toon(0x7fbf7a), n);
+    const petalCols = [0xffffff, 0xffc9e5, 0xffe58a, 0xd3b6ff, 0xff9ff3];
+    for (let i = 0; i < n; i++) {
+      const { x, z } = randomInWorld(cfg.size, 3, cfg.size / 2 - 4);
+      e.set(0, Math.random() * Math.PI * 2, 0);
+      q.setFromEuler(e);
+      const s = 0.8 + Math.random() * 0.8;
+      sc.set(s, s, s);
+      pv.set(x, world.H(x, z), z);
+      dummy.compose(pv, q, sc);
+      petalsIM.setMatrixAt(i, dummy);
+      centersIM.setMatrixAt(i, dummy);
+      stemsIM.setMatrixAt(i, dummy);
+      cc.set(petalCols[(Math.random() * petalCols.length) | 0]);
+      petalsIM.setColorAt(i, cc);
+    }
+    scene.add(petalsIM, centersIM, stemsIM);
+  }
+
+  // scattered rocks
+  {
+    const n = 26;
+    const rocks = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.5, 0), new THREE.MeshToonMaterial({ gradientMap }), n);
+    for (let i = 0; i < n; i++) {
+      const { x, z } = randomInWorld(cfg.size, 6, cfg.size / 2 - 5);
+      e.set(Math.random() * 0.4, Math.random() * Math.PI, Math.random() * 0.4);
+      q.setFromEuler(e);
+      const s = 0.4 + Math.random() * 1.1;
+      sc.set(s, s * 0.72, s);
+      pv.set(x, world.H(x, z) + 0.08, z);
+      dummy.compose(pv, q, sc);
+      rocks.setMatrixAt(i, dummy);
+      cc.set(0x9d8fc0).offsetHSL(0, 0, (Math.random() - 0.5) * 0.12);
+      rocks.setColorAt(i, cc);
+    }
+    rocks.castShadow = true;
+    scene.add(rocks);
+  }
+
+  // glowing mushrooms
+  {
+    const capCols = [0xff6f91, 0x8ce0d2, 0xb983ff];
+    for (let i = 0; i < 14; i++) {
+      const { x, z } = randomInWorld(cfg.size, 6, cfg.size / 2 - 5);
+      const shroom = new THREE.Group();
+      const s = 0.7 + Math.random() * 0.9;
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 0.3, 7), toon(0xfff3e6));
+      stem.position.y = 0.15;
+      const col = capCols[(Math.random() * 3) | 0];
+      const cap = new THREE.Mesh(
+        new THREE.SphereGeometry(0.19, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+        toon(col, { emissive: col, emissiveIntensity: isNight ? 1.2 : 0.35 })
+      );
+      cap.position.y = 0.28;
+      cap.scale.set(1, 0.8, 1);
+      shroom.add(stem, cap);
+      for (let d = 0; d < 2; d++) {
+        const dot = new THREE.Mesh(new THREE.SphereGeometry(0.028, 6, 5), toon(0xffffff));
+        const da = Math.random() * Math.PI * 2;
+        dot.position.set(Math.cos(da) * 0.12, 0.36, Math.sin(da) * 0.12);
+        shroom.add(dot);
+      }
+      shroom.scale.setScalar(s);
+      shroom.position.set(x, world.H(x, z), z);
+      addShadows(shroom);
+      scene.add(shroom);
+    }
+  }
+}
+
+/* ---------- Celestial creatures ---------- */
+function critterWings(color, w = 0.16, h = 0.12) {
+  const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.75, side: THREE.DoubleSide, depthWrite: false });
+  const l = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+  const r = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+  l.position.x = -w / 2 - 0.01; r.position.x = w / 2 + 0.01;
+  return [l, r];
+}
+
+function makeButterfly(cfg) {
+  const g = new THREE.Group();
+  const col = [0xff9ff3, 0xffd166, 0xb983ff, 0x8ccfff][(Math.random() * 4) | 0];
+  const [wl, wr] = critterWings(col, 0.2, 0.15);
+  const bodyM = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.16, 5), toon(0x5d4a7a));
+  bodyM.rotation.x = Math.PI / 2;
+  g.add(wl, wr, bodyM);
+  world.scene.add(g);
+  const anchor = randomInWorld(cfg.size, 5, world.bound - 5);
+  const p1 = Math.random() * 9, f1 = 0.14 + Math.random() * 0.1;
+  return {
+    update(dt) {
+      const t = world.t;
+      const x = anchor.x + Math.sin(t * f1 + p1) * 9;
+      const z = anchor.z + Math.cos(t * f1 * 1.3 + p1 * 2) * 9;
+      const y = world.H(x, z) + 1.0 + Math.sin(t * 1.7 + p1) * 0.45;
+      const dx = x - g.position.x, dz = z - g.position.z;
+      if (Math.abs(dx) + Math.abs(dz) > 0.001) g.rotation.y = Math.atan2(dx, dz);
+      g.position.set(x, y, z);
+      const flap = Math.sin(t * 16 + p1) * 0.9;
+      wl.rotation.y = flap; wr.rotation.y = -flap;
+    },
+  };
+}
+
+function makeFairy(cfg) {
+  const g = new THREE.Group();
+  const col = [0xffb8de, 0xffe58a, 0xd3b6ff][(Math.random() * 3) | 0];
+  const core = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), toon(col, { emissive: col, emissiveIntensity: 2.4 }));
+  const [wl, wr] = critterWings(0xffffff, 0.13, 0.16);
+  wl.position.y = wr.position.y = 0.06;
+  g.add(core, wl, wr);
+  world.scene.add(g);
+  const tree = world.trees.length ? world.trees[(Math.random() * world.trees.length) | 0] : { x: 0, z: 0 };
+  const ay = world.H(tree.x, tree.z) + 2.4;
+  const p = Math.random() * 9;
+  return {
+    update(dt) {
+      const t = world.t;
+      g.position.set(
+        tree.x + Math.sin(t * 0.7 + p) * 1.6,
+        ay + Math.sin(t * 1.3 + p * 2) * 0.8,
+        tree.z + Math.cos(t * 0.9 + p) * 1.6
+      );
+      const flap = Math.sin(t * 20 + p) * 0.8;
+      wl.rotation.y = flap; wr.rotation.y = -flap;
+      if (Math.random() < dt * 1.2) world.particles.emit(g.position, 1, { colors: [col], spread: 0.4, up: 0.3, life: 0.8, grav: 0.4 });
+    },
+  };
+}
+
+function makeFireflies(cfg) {
+  const n = 36;
+  const base = new Float32Array(n * 3);
+  const pos = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const { x, z } = randomInWorld(cfg.size, 4, world.bound - 4);
+    base[i * 3] = x;
+    base[i * 3 + 1] = world.H(x, z) + 0.6 + Math.random() * 1.8;
+    base[i * 3 + 2] = z;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const mat = new THREE.PointsMaterial({
+    color: 0xffe58a, size: 0.55, map: particleTex, transparent: true,
+    depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true,
+  });
+  const points = new THREE.Points(geo, mat);
+  points.frustumCulled = false;
+  world.scene.add(points);
+  return {
+    update(dt) {
+      const t = world.t;
+      for (let i = 0; i < n; i++) {
+        pos[i * 3] = base[i * 3] + Math.sin(t * 0.6 + i * 1.7) * 1.4;
+        pos[i * 3 + 1] = base[i * 3 + 1] + Math.sin(t * 0.9 + i * 2.3) * 0.5;
+        pos[i * 3 + 2] = base[i * 3 + 2] + Math.cos(t * 0.7 + i * 1.1) * 1.4;
+      }
+      geo.attributes.position.needsUpdate = true;
+      mat.opacity = 0.65 + Math.sin(t * 2.2) * 0.3;
+    },
+  };
+}
+
+function makeStag(cfg) {
+  const c = 0xf5eefc;
+  const root = new THREE.Group();
+  const torso = new THREE.Mesh(new THREE.SphereGeometry(0.42, 16, 12), toon(c));
+  torso.position.y = 1.2;
+  torso.scale.set(0.75, 0.8, 1.5);
+  root.add(torso);
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.15, 0.85, 8), toon(c));
+  neck.position.set(0, 1.65, 0.5);
+  neck.rotation.x = -0.35;
+  root.add(neck);
+  const head = new THREE.Group();
+  head.position.set(0, 2.05, 0.68);
+  root.add(head);
+  head.add(new THREE.Mesh(new THREE.SphereGeometry(0.2, 14, 10), toon(c)));
+  const snout = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), toon(0xfff8ff));
+  snout.position.set(0, -0.05, 0.18);
+  snout.scale.set(0.8, 0.7, 1.2);
+  head.add(snout);
+  for (const s of [-1, 1]) {
+    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.16, 7), toon(c));
+    ear.position.set(0.11 * s, 0.18, -0.05);
+    ear.rotation.z = -0.5 * s;
+    head.add(ear);
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), toon(0x3a2f56));
+    eye.position.set(0.1 * s, 0.04, 0.15);
+    head.add(eye);
+    // glowing antlers: a main beam and two tines each
+    const antler = new THREE.Group();
+    antler.position.set(0.09 * s, 0.16, 0);
+    const amat = toon(0xffd166, { emissive: 0xffc233, emissiveIntensity: 1.7 });
+    const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.03, 0.52, 6), amat);
+    beam.position.y = 0.26;
+    beam.rotation.z = -0.4 * s;
+    antler.add(beam);
+    for (let k = 0; k < 2; k++) {
+      const tine = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.02, 0.22, 6), amat);
+      tine.position.set((0.07 + k * 0.05) * -s, 0.24 + k * 0.16, 0.03);
+      tine.rotation.z = 0.7 * s;
+      tine.rotation.x = -0.2;
+      antler.add(tine);
+    }
+    head.add(antler);
+  }
+  const legs = [];
+  for (const [x, z] of [[0.2, 0.42], [-0.2, 0.42], [0.2, -0.42], [-0.2, -0.42]]) {
+    const leg = new THREE.Group();
+    const geo = new THREE.CylinderGeometry(0.045, 0.04, 1.1, 7);
+    geo.translate(0, -0.55, 0);
+    leg.add(new THREE.Mesh(geo, toon(0xe8ddf5)));
+    leg.position.set(x, 1.15, z);
+    root.add(leg);
+    legs.push(leg);
+  }
+  const tailPuff = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), toon(0xffffff));
+  tailPuff.position.set(0, 1.4, -0.65);
+  root.add(tailPuff);
+  addShadows(root);
+  root.scale.setScalar(1.1);
+  world.scene.add(root);
+
+  let waypoint = randomInWorld(cfg.size, 6, world.bound - 6);
+  const p = Math.random() * 9;
+  return {
+    update(dt) {
+      const t = world.t;
+      const dx = waypoint.x - root.position.x, dz = waypoint.z - root.position.z;
+      const d = Math.hypot(dx, dz);
+      if (d < 2) { waypoint = randomInWorld(cfg.size, 6, world.bound - 6); return; }
+      const spd = 2.2;
+      root.position.x += dx / d * spd * dt;
+      root.position.z += dz / d * spd * dt;
+      root.position.y = world.H(root.position.x, root.position.z);
+      const target = Math.atan2(dx, dz);
+      let dr = target - root.rotation.y;
+      while (dr > Math.PI) dr -= Math.PI * 2;
+      while (dr < -Math.PI) dr += Math.PI * 2;
+      root.rotation.y += dr * Math.min(1, 4 * dt);
+      for (let i = 0; i < 4; i++) legs[i].rotation.x = Math.sin(t * 5 + p + (i % 2) * Math.PI) * 0.4;
+      if (Math.random() < dt * 2.5) {
+        world.particles.emit(root.position, 1, { colors: [0xffe58a, 0xffd166], spread: 0.5, up: 0.6, life: 0.9, grav: 0.3 });
+      }
+    },
+  };
+}
+
+function makeWhale(cfg) {
+  const root = new THREE.Group();
+  const ghost = (c, op) => {
+    const m = toon(c, { emissive: 0x8a77d5, emissiveIntensity: 0.35 });
+    m.transparent = true; m.opacity = op; m.depthWrite = false;
+    return m;
+  };
+  const body = new THREE.Mesh(new THREE.SphereGeometry(2.4, 20, 16), ghost(0xb9a8f0, 0.82));
+  body.scale.set(1, 0.8, 2.1);
+  root.add(body);
+  const belly = new THREE.Mesh(new THREE.SphereGeometry(1.9, 16, 12), ghost(0xe8ddff, 0.7));
+  belly.position.set(0, -0.8, 0.6);
+  belly.scale.set(0.9, 0.6, 1.7);
+  root.add(belly);
+  const tail = new THREE.Group();
+  tail.position.set(0, 0.3, -5.2);
+  for (const s of [-1, 1]) {
+    const fluke = new THREE.Mesh(new THREE.SphereGeometry(1.1, 12, 8), ghost(0xb9a8f0, 0.82));
+    fluke.scale.set(1.4, 0.22, 0.8);
+    fluke.position.set(1.15 * s, 0, -0.3);
+    fluke.rotation.y = 0.5 * s;
+    tail.add(fluke);
+  }
+  root.add(tail);
+  for (const s of [-1, 1]) {
+    const fin = new THREE.Mesh(new THREE.SphereGeometry(0.9, 12, 8), ghost(0xcbbcf5, 0.75));
+    fin.scale.set(1.3, 0.18, 0.55);
+    fin.position.set(2.1 * s, -0.5, 1.2);
+    fin.rotation.z = -0.35 * s;
+    root.add(fin);
+  }
+  for (const s of [-1, 1]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), toon(0x2a1a45));
+    eye.position.set(1.55 * s, 0.15, 3.2);
+    root.add(eye);
+  }
+  // a constellation glitters along its back
+  for (let i = 0; i < 7; i++) {
+    const star = new THREE.Mesh(
+      new THREE.SphereGeometry(0.1, 6, 5),
+      toon(0xffffff, { emissive: 0xfff6d8, emissiveIntensity: 2.6 })
+    );
+    star.position.set((Math.random() - 0.5) * 1.6, 1.7 + Math.random() * 0.3, (Math.random() - 0.5) * 6);
+    root.add(star);
+  }
+  root.scale.setScalar(1.6);
+  world.scene.add(root);
+
+  let theta = Math.random() * Math.PI * 2;
+  const R = cfg.size * 0.5;
+  const look = new THREE.Vector3();
+  return {
+    update(dt) {
+      const t = world.t;
+      theta += dt * 0.05;
+      const y = 34 + Math.sin(t * 0.3) * 3;
+      root.position.set(Math.cos(theta) * R, y, Math.sin(theta) * R);
+      look.set(Math.cos(theta + 0.08) * R, y + Math.cos(t * 0.3) * 1.2, Math.sin(theta + 0.08) * R);
+      root.lookAt(look);
+      tail.rotation.x = Math.sin(t * 1.3) * 0.3;
+      root.rotation.z += Math.sin(t * 0.4) * 0.04;
+      if (Math.random() < dt * 4) {
+        world.particles.emit(root.position.clone().add(new THREE.Vector3(0, -1, 0)), 1,
+          { colors: [0xd3b6ff, 0xfff6d8], spread: 1, up: -0.5, life: 2.2, grav: 0.15 });
+      }
+    },
+  };
+}
+
+function makePhoenix(cfg) {
+  const root = new THREE.Group();
+  const fire = (c, i = 0.9) => toon(c, { emissive: c, emissiveIntensity: i });
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.38, 14, 10), fire(0xffc233));
+  body.scale.set(0.9, 0.9, 1.3);
+  root.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 8), fire(0xffd166));
+  head.position.set(0, 0.3, 0.5);
+  root.add(head);
+  const beak = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.16, 7), toon(0xff8c42));
+  beak.position.set(0, 0.28, 0.74);
+  beak.rotation.x = Math.PI / 2;
+  root.add(beak);
+  for (let k = 0; k < 3; k++) {
+    const crest = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 5), fire([0xff6f91, 0xffa25c, 0xffd166][k]));
+    crest.position.set(0, 0.52 + k * 0.08, 0.42 - k * 0.08);
+    root.add(crest);
+  }
+  const wings = [];
+  const wingCols = [0xffd166, 0xffa25c, 0xff6f91];
+  for (const s of [-1, 1]) {
+    const wing = new THREE.Group();
+    wing.position.set(0.3 * s, 0.15, 0);
+    for (let f = 0; f < 3; f++) {
+      const feather = new THREE.Mesh(new THREE.SphereGeometry(0.3 - f * 0.05, 10, 8), fire(wingCols[f], 0.8));
+      feather.position.set((0.28 + f * 0.32) * s, f * 0.06, -0.05 - f * 0.12);
+      feather.scale.set(1.4, 0.18, 0.6);
+      feather.rotation.y = 0.25 * f * s;
+      wing.add(feather);
+    }
+    root.add(wing);
+    wings.push(wing);
+  }
+  // long tail streamers
+  const streamers = [];
+  const strCols = [0xff6f91, 0xffd166, 0xffa25c];
+  for (let k = 0; k < 3; k++) {
+    const st = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), fire(strCols[k], 0.9));
+    st.scale.set(0.6, 0.5, 9);
+    st.position.set((k - 1) * 0.16, -0.05 - Math.abs(k - 1) * 0.06, -1.3);
+    root.add(st);
+    streamers.push(st);
+  }
+  world.scene.add(root);
+
+  let theta = Math.random() * Math.PI * 2;
+  const R = cfg.size * 0.32;
+  const look = new THREE.Vector3();
+  return {
+    update(dt) {
+      const t = world.t;
+      theta += dt * 0.16;
+      const y = 14 + Math.sin(t * 0.6) * 2.5;
+      root.position.set(Math.cos(theta) * R, y, Math.sin(theta) * R);
+      look.set(Math.cos(theta + 0.1) * R, y, Math.sin(theta + 0.1) * R);
+      root.lookAt(look);
+      const flap = Math.sin(t * 9) * 0.6;
+      wings[0].rotation.z = -0.3 - flap;
+      wings[1].rotation.z = 0.3 + flap;
+      for (let k = 0; k < 3; k++) streamers[k].rotation.x = Math.sin(t * 2.2 + k) * 0.08;
+      if (Math.random() < dt * 22) {
+        world.particles.emit(root.position.clone().add(new THREE.Vector3(0, -0.2, 0)), 1,
+          { colors: [0xffd166, 0xff8c42, 0xff6f91], spread: 0.6, up: -0.3, life: 1.4, grav: 0.4 });
+      }
+    },
+  };
+}
+
+function makeDragon(cfg) {
+  const root = new THREE.Group();
+  const bodyC = 0x9fe6c8, bellyC = 0xfff3e6, wingC = 0xcbb3f5;
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.55, 16, 12), toon(bodyC));
+  body.scale.set(0.9, 0.9, 1.4);
+  root.add(body);
+  const belly = new THREE.Mesh(new THREE.SphereGeometry(0.42, 12, 10), toon(bellyC));
+  belly.position.set(0, -0.18, 0.15);
+  belly.scale.set(0.8, 0.7, 1.2);
+  root.add(belly);
+  const head = new THREE.Group();
+  head.position.set(0, 0.5, 0.85);
+  root.add(head);
+  head.add(new THREE.Mesh(new THREE.SphereGeometry(0.32, 14, 10), toon(bodyC)));
+  const snout = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), toon(bellyC));
+  snout.position.set(0, -0.08, 0.26);
+  snout.scale.set(1, 0.7, 1);
+  head.add(snout);
+  for (const s of [-1, 1]) {
+    const horn = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.2, 7), toon(0xffd166, { emissive: 0xffc233, emissiveIntensity: 0.8 }));
+    horn.position.set(0.13 * s, 0.3, -0.05);
+    horn.rotation.z = -0.35 * s;
+    head.add(horn);
+    const eye = makeEye(0x8a5cff);
+    eye.position.set(0.15 * s, 0.08, 0.24);
+    eye.rotation.y = 0.3 * s;
+    eye.scale.setScalar(0.9);
+    head.add(eye);
+  }
+  const wings = [];
+  for (const s of [-1, 1]) {
+    const wing = new THREE.Group();
+    wing.position.set(0.35 * s, 0.35, -0.1);
+    for (let f = 0; f < 2; f++) {
+      const mem = new THREE.Mesh(new THREE.SphereGeometry(0.45 - f * 0.1, 10, 8), toon(wingC));
+      mem.position.set((0.4 + f * 0.5) * s, f * 0.14, -0.1 * f);
+      mem.scale.set(1.5, 0.12, 0.9);
+      wing.add(mem);
+    }
+    root.add(wing);
+    wings.push(wing);
+  }
+  const tailBits = [];
+  for (let k = 0; k < 3; k++) {
+    const seg = new THREE.Mesh(new THREE.SphereGeometry(0.24 - k * 0.06, 10, 8), toon(bodyC));
+    seg.position.set(0, 0.05 - k * 0.04, -0.85 - k * 0.4);
+    root.add(seg);
+    tailBits.push(seg);
+  }
+  const tailFin = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.26, 6), toon(0xffb8de));
+  tailFin.position.set(0, 0, -2.1);
+  tailFin.rotation.x = -Math.PI / 2;
+  root.add(tailFin);
+  for (let k = 0; k < 4; k++) {
+    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.16, 6), toon(bellyC));
+    spike.position.set(0, 0.55 - k * 0.06, 0.2 - k * 0.35);
+    root.add(spike);
+  }
+  root.scale.setScalar(1.3);
+  world.scene.add(root);
+
+  let theta = Math.random() * Math.PI * 2;
+  const R = cfg.size * 0.4;
+  const look = new THREE.Vector3();
+  let puffT = 3;
+  return {
+    update(dt) {
+      const t = world.t;
+      theta -= dt * 0.11; // opposite direction from the phoenix
+      const y = 20 + Math.sin(t * 0.5 + 2) * 3;
+      root.position.set(Math.cos(theta) * R, y, Math.sin(theta) * R);
+      look.set(Math.cos(theta - 0.1) * R, y, Math.sin(theta - 0.1) * R);
+      root.lookAt(look);
+      const flap = Math.sin(t * 6) * 0.7;
+      wings[0].rotation.z = -0.25 - flap;
+      wings[1].rotation.z = 0.25 + flap;
+      for (let k = 0; k < 3; k++) tailBits[k].position.x = Math.sin(t * 3 - k * 0.8) * 0.1 * (k + 1);
+      puffT -= dt;
+      if (puffT <= 0) {
+        puffT = 3 + Math.random() * 3;
+        const mouth = root.localToWorld(new THREE.Vector3(0, 0.4, 1.5));
+        world.particles.emit(mouth, 14, { colors: [0xff9ff3, 0xffd166, 0xffffff], spread: 1.6, up: 0.5, life: 1.1, grav: 0.3 });
+      }
+    },
+  };
+}
+
+function spawnCreatures(cfg, list) {
+  for (const kind of list) {
+    if (kind === 'stag') world.critters.push(makeStag(cfg));
+    else if (kind === 'whale') world.critters.push(makeWhale(cfg));
+    else if (kind === 'phoenix') world.critters.push(makePhoenix(cfg));
+    else if (kind === 'dragon') world.critters.push(makeDragon(cfg));
+    else if (kind === 'fireflies') world.critters.push(makeFireflies(cfg));
+    else if (kind === 'fairies') for (let i = 0; i < 6; i++) world.critters.push(makeFairy(cfg));
+    else if (kind === 'butterflies') for (let i = 0; i < 8; i++) world.critters.push(makeButterfly(cfg));
+  }
+}
+
+/* ============================================================
    Character wrapper (movement + animation state)
 ============================================================ */
 class Character {
@@ -569,6 +1233,7 @@ function terrainHeightFn() {
 }
 
 function buildSky(scene, cfg) {
+  const skyExtras = { nightStarMat: null };
   const geo = new THREE.SphereGeometry(420, 24, 12);
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
@@ -595,8 +1260,10 @@ function buildSky(scene, cfg) {
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    const stars = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xfff6d8, size: 2.2, map: particleTex, transparent: true, depthWrite: false, fog: false }));
+    const starMat = new THREE.PointsMaterial({ color: 0xfff6d8, size: 2.2, map: particleTex, transparent: true, depthWrite: false, fog: false });
+    const stars = new THREE.Points(g, starMat);
     scene.add(stars);
+    skyExtras.nightStarMat = starMat;
     const moon = new THREE.Mesh(new THREE.SphereGeometry(14, 20, 16), new THREE.MeshBasicMaterial({ color: 0xfff2c9, fog: false }));
     moon.position.set(-140, 190, -260);
     scene.add(moon);
@@ -615,6 +1282,7 @@ function buildSky(scene, cfg) {
     sun.position.set(150, 170, -240);
     scene.add(sun);
   }
+  return skyExtras;
 }
 
 function buildRainbow(scene) {
@@ -648,7 +1316,7 @@ function buildLevel(levelIdx, mode, playerKind) {
   const fogColor = new THREE.Color(cfg.pal.skyBot);
   scene.fog = new THREE.Fog(fogColor, size * 0.5, size * 1.6);
 
-  buildSky(scene, cfg);
+  const skyExtras = buildSky(scene, cfg);
   if (cfg.pal.rainbow) buildRainbow(scene);
 
   // lights
@@ -673,6 +1341,7 @@ function buildLevel(levelIdx, mode, playerKind) {
   sunLight.shadow.camera.bottom = -50;
   sunLight.shadow.camera.far = 220;
   sunLight.shadow.bias = -0.0015;
+  sunLight.shadow.radius = 4;
   scene.add(sunLight);
   scene.add(sunLight.target);
 
@@ -705,6 +1374,8 @@ function buildLevel(levelIdx, mode, playerKind) {
     scene, cfg, H, size, bound, particles, sunLight,
     caves: [], stars: [], trees: [], clouds: [], collectRing: null,
     wolves: [], preys: [], t: 0,
+    critters: [], ponds: [], auroras: [],
+    nightStarMat: skyExtras.nightStarMat,
   };
 
   // trees
@@ -734,7 +1405,7 @@ function buildLevel(levelIdx, mode, playerKind) {
     const col = [0xb983ff, 0xff9ff3, 0xffd166][(Math.random() * 3) | 0];
     const crystal = new THREE.Mesh(
       new THREE.OctahedronGeometry(0.5 + Math.random() * 0.5),
-      toon(col, { emissive: col, emissiveIntensity: isNight ? 0.9 : 0.35 })
+      toon(col, { emissive: col, emissiveIntensity: isNight ? 1.4 : 0.5 })
     );
     crystal.scale.y = 1.8;
     crystal.position.set(x, H(x, z) + 0.5, z);
@@ -833,6 +1504,15 @@ function buildLevel(levelIdx, mode, playerKind) {
     world.caves.push({ x, z, padPos, pad, ring, bodyR: CAVE_BODY_R + 0.4 });
   }
 
+  // the mythic realm: mountains on the horizon, detailed ground, ponds,
+  // auroras, and the celestial creatures that visit this level
+  buildMountains(scene, cfg);
+  buildGroundDetail(scene, cfg);
+  const scn = SCENERY[levelIdx];
+  for (let i = 0; i < scn.ponds; i++) buildPond();
+  if (scn.aurora) buildAurora(scene);
+  spawnCreatures(cfg, scn.creatures);
+
   return { scene, cfg };
 }
 
@@ -864,8 +1544,14 @@ function makeStarMesh() {
   shape.closePath();
   const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.16, bevelEnabled: true, bevelSize: 0.05, bevelThickness: 0.04, bevelSegments: 2 });
   geo.center();
-  const mesh = new THREE.Mesh(geo, toon(0xffd166, { emissive: 0xffc233, emissiveIntensity: 0.9 }));
+  const mesh = new THREE.Mesh(geo, toon(0xffd166, { emissive: 0xffc233, emissiveIntensity: 1.4 }));
   mesh.castShadow = true;
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: particleTex, color: 0xffd166, transparent: true, opacity: 0.5,
+    depthWrite: false, blending: THREE.AdditiveBlending,
+  }));
+  glow.scale.set(2.6, 2.6, 1);
+  mesh.add(glow);
   return mesh;
 }
 
@@ -1163,6 +1849,17 @@ function flash() {
   f.classList.add('on');
   setTimeout(() => f.classList.remove('on'), 120);
 }
+function worldPopup(text, pos3) {
+  const v = pos3.clone().project(camera);
+  if (v.z > 1) return;
+  const d = document.createElement('div');
+  d.className = 'popup';
+  d.textContent = text;
+  d.style.left = `${(v.x * 0.5 + 0.5) * window.innerWidth}px`;
+  d.style.top = `${(-v.y * 0.5 + 0.5) * window.innerHeight}px`;
+  $('popups').appendChild(d);
+  setTimeout(() => d.remove(), 1350);
+}
 
 function refreshLevelGrid() {
   const grid = $('level-grid');
@@ -1310,6 +2007,11 @@ function playerCaught(wolf) {
   game.invulnT = 2.5;
   flash();
   Sfx.hurt();
+  const hh = $('hud-hearts');
+  hh.classList.remove('hit');
+  void hh.offsetWidth;
+  hh.classList.add('hit');
+  setTimeout(() => hh.classList.remove('hit'), 700);
   world.particles.emit(player.pos, 24, { colors: [0xff9ff3, 0xffffff], up: 5 });
   updateHud();
   if (game.hearts <= 0) {
@@ -1347,6 +2049,7 @@ function preyCaughtByPlayer(prey) {
   game.caught++;
   Sfx.pounce();
   world.particles.emit(prey.ch.pos, 34, { colors: SPARKLE, up: 6, spread: 4 });
+  worldPopup('Got you! 🐺', prey.ch.pos);
   prey.ch.mesh.visible = false;
   showToast(`You caught the ${prey.ch.kind}! ${game.caught === 1 ? 'One more to go!' : ''}`, 2200);
   updateHud();
@@ -1436,6 +2139,20 @@ function updatePlayer(dt) {
 
   player.animate(dt);
 
+  // magic trails
+  if (game.character === 'pegasus' && player.flying) {
+    if (Math.random() < dt * 30) {
+      world.particles.emit(player.pos.clone().add(new THREE.Vector3(0, 0.9, 0)), 2,
+        { colors: RAINBOW, spread: 0.9, up: 0.3, life: 1.2, grav: 0.25 });
+    }
+  } else if (game.character === 'unicorn' && player.speedMag > 9) {
+    if (Math.random() < dt * 24) {
+      world.particles.emit(player.pos, 2, { colors: SPARKLE, spread: 1, up: 1.2, life: 0.6, grav: 1.5 });
+    }
+  } else if (game.character === 'wolf' && game.pounceT > 0) {
+    world.particles.emit(player.pos, 2, { colors: [0x8a6fd0, 0x5d4a9a], spread: 1.4, up: 1, life: 0.5, grav: 1 });
+  }
+
   // stars (evade)
   if (game.mode === 'evade') {
     for (const s of world.stars) {
@@ -1446,6 +2163,7 @@ function updatePlayer(dt) {
         game.starsGot++;
         Sfx.chime();
         world.particles.emit(s.mesh.position, 22, { colors: [0xffd166, 0xffe58a, 0xffffff], up: 4, spread: 3 });
+        worldPopup(`⭐ ${game.starsGot} / ${cfg.stars}`, s.mesh.position);
         updateHud();
         if (game.starsGot >= cfg.stars) completeLevel();
       }
@@ -1553,6 +2271,10 @@ function tick(now) {
     cl.position.x += cl.userData.speed * dt;
     if (cl.position.x > world.size) cl.position.x = -world.size;
   }
+  for (const cr of world.critters) cr.update(dt);
+  for (const pm of world.ponds) pm.uniforms.t.value = world.t;
+  for (const am of world.auroras) am.uniforms.t.value += dt;
+  if (world.nightStarMat) world.nightStarMat.opacity = 0.7 + Math.sin(world.t * 1.7) * 0.3;
   world.particles.update(dt);
 
   const inMenu = game.state === 'title' || game.state === 'select' || game.state === 'levels';
@@ -1565,7 +2287,7 @@ function tick(now) {
     for (const c of menuCast) c.animate(dt);
   }
 
-  if (game.state !== 'playing') { renderer.render(world.scene, camera); return; }
+  if (game.state !== 'playing') { renderFrame(); return; }
 
   updatePlayer(dt);
 
@@ -1584,7 +2306,7 @@ function tick(now) {
     game.timer -= dt;
     if (game.timer <= 0) {
       gameOver('The ponies were too quick! Time ran out.');
-      renderer.render(world.scene, camera);
+      renderFrame();
       return;
     }
     const threats = [{ x: player.pos.x, z: player.pos.z }];
@@ -1608,7 +2330,7 @@ function tick(now) {
     if (game.toastT <= 0) $('toast').classList.add('hidden');
   }
 
-  renderer.render(world.scene, camera);
+  renderFrame();
 }
 requestAnimationFrame(tick);
 
@@ -1707,5 +2429,5 @@ guideArrow.visible = false;
 world.scene.add(guideArrow);
 camera.position.set(8, 7, 16);
 camera.lookAt(0, 2, 0);
-renderer.render(world.scene, camera);
+renderFrame();
 showScreen('screen-title');

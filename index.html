@@ -9,7 +9,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 <script type="importmap">
-{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js" } }
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+} }
 </script>
 </head>
 <body>
@@ -81,6 +84,7 @@
   </div>
 
   <div id="toast" class="hidden"></div>
+  <div id="popups"></div>
   <div id="flash"></div>
 
   <!-- Pause -->
