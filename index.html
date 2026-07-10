@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Magic Meadow</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js" } }
+</script>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="ui">
+
+  <!-- Title -->
+  <div class="screen" id="screen-title">
+    <div class="panel title-panel">
+      <div class="title-sparkles">✨ ⭐ ✨</div>
+      <h1>Magic Meadow</h1>
+      <p class="tagline">A game designed by Coco, age 4</p>
+      <p class="subtitle">The unicorn and pegasus hide in caves. The wolf tries to eat them!</p>
+      <button class="big-btn yellow" id="btn-play">Play!</button>
+    </div>
+  </div>
+
+  <!-- Character select -->
+  <div class="screen hidden" id="screen-select">
+    <div class="panel">
+      <h2>Who do you want to be?</h2>
+      <div class="char-cards">
+        <button class="char-card" data-char="unicorn">
+          <div class="char-emoji">🦄</div>
+          <div class="char-name">Unicorn</div>
+          <div class="char-desc">Fast and sparkly! Space to jump, double tap for a magic double jump.</div>
+          <div class="char-goal pink-tag">Collect stars, hide from the wolf</div>
+        </button>
+        <button class="char-card" data-char="pegasus">
+          <div class="char-emoji">🐴</div>
+          <div class="char-wings">🪽</div>
+          <div class="char-name">Pegasus</div>
+          <div class="char-desc">She can fly! Hold Space to flap up into the sky.</div>
+          <div class="char-goal purple-tag">Collect stars, hide from the wolf</div>
+        </button>
+        <button class="char-card wolf-card" data-char="wolf">
+          <div class="char-emoji">🐺</div>
+          <div class="char-name">Wolf</div>
+          <div class="char-desc">Scary cute! Press Space to pounce on the ponies.</div>
+          <div class="char-goal yellow-tag">Catch the unicorn and pegasus</div>
+        </button>
+      </div>
+      <button class="small-btn" id="btn-back-title">Back</button>
+    </div>
+  </div>
+
+  <!-- Level select -->
+  <div class="screen hidden" id="screen-levels">
+    <div class="panel">
+      <h2>Pick a level</h2>
+      <div class="level-grid" id="level-grid"></div>
+      <button class="small-btn" id="btn-back-select">Back</button>
+    </div>
+  </div>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div class="hud-top">
+      <div class="hud-pill" id="hud-hearts">💛💛💛</div>
+      <div class="hud-pill hud-level" id="hud-level">Level 1: Sunny Meadow</div>
+      <div class="hud-pill" id="hud-objective">⭐ 0 / 5</div>
+      <div class="hud-pill hidden" id="hud-timer">1:30</div>
+      <button class="hud-btn" id="btn-mute" title="Sound">🔊</button>
+      <button class="hud-btn" id="btn-pause" title="Pause">⏸️</button>
+    </div>
+    <div id="stamina-wrap" class="hidden"><div id="stamina-bar"></div></div>
+    <div class="hud-help" id="hud-help">Move: WASD or arrows · Space: jump · Shift: zoom!</div>
+  </div>
+
+  <div id="toast" class="hidden"></div>
+  <div id="flash"></div>
+
+  <!-- Pause -->
+  <div class="screen hidden" id="screen-pause">
+    <div class="panel">
+      <h2>Paused</h2>
+      <button class="big-btn yellow" id="btn-resume">Keep Playing</button>
+      <button class="big-btn pink" id="btn-restart">Restart Level</button>
+      <button class="big-btn purple" id="btn-quit">Choose Level</button>
+    </div>
+  </div>
+
+  <!-- Level complete -->
+  <div class="screen hidden" id="screen-complete">
+    <div class="panel">
+      <h2 id="complete-title">Level Complete!</h2>
+      <div class="rating" id="complete-rating">⭐⭐⭐</div>
+      <p id="complete-text">You found every star!</p>
+      <button class="big-btn yellow" id="btn-next">Next Level</button>
+      <button class="big-btn pink" id="btn-again">Play Again</button>
+      <button class="big-btn purple" id="btn-complete-levels">Choose Level</button>
+    </div>
+  </div>
+
+  <!-- Game over (gentle) -->
+  <div class="screen hidden" id="screen-gameover">
+    <div class="panel">
+      <h2 id="gameover-title">Oh no!</h2>
+      <p id="gameover-text">The wolf was too sneaky this time.</p>
+      <button class="big-btn yellow" id="btn-retry">Try Again</button>
+      <button class="big-btn purple" id="btn-gameover-levels">Choose Level</button>
+    </div>
+  </div>
+
+  <!-- Victory -->
+  <div class="screen hidden" id="screen-victory">
+    <div class="panel">
+      <div class="trophy">🏆</div>
+      <h2>You did it!</h2>
+      <p>You finished all ten levels and won Coco's Champion Cup!</p>
+      <button class="big-btn yellow" id="btn-victory-title">Back to Start</button>
+    </div>
+  </div>
+
+</div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
